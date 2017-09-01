@@ -185,42 +185,55 @@ def create_graph(num_labels):
     # input
     x0 = tf.placeholder(shape=[None, image_size, image_size, 3], dtype=tf.float32)
     y_ = tf.placeholder(shape=[None, num_labels], dtype=tf.float32)
+    print(x0.shape)
 
-    # 64x64x3->32x32x8
-    b0 = tf.Variable(tf.constant(0.1, shape=[8]))
-    x1 = max_pool2x2(tf.nn.relu(conv2d(x0, [5, 5, 3, 8]) + b0))
+    # 64x64x3->32x32x64
+    x = tf.layers.conv2d(x0, 64, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x0, 64, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
+    print(x.shape)
 
-    # 32x32x8->16x16x32
-    b1 = tf.Variable(tf.constant(0.1, shape=[32]))
-    x2 = max_pool2x2(tf.nn.relu(conv2d(x1, [5, 5, 8, 32]) + b1))
+    # 32x32x64->16x16x128
+    x = tf.layers.conv2d(x, 128, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 128, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
+    print(x.shape)
 
-    # 16x16x32->8x8x64
-    b2 = tf.Variable(tf.constant(0.1, shape=[64]))
-    x3 = max_pool2x2(tf.nn.relu(conv2d(x2, [5, 5, 32, 64]) + b2))
+    # 16x16x128->8x8x256
+    x = tf.layers.conv2d(x, 256, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 256, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
+    print(x.shape)
 
-    # reshaped input for dense layer
-    x3_ = tf.reshape(x3, shape=[-1, 8 * 8 * 64])
+    # 8x8x256->4x4x512
+    x = tf.layers.conv2d(x, 512, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 512, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
+    print(x.shape)
 
-    # dense layer w/ 1024 elements
-    w3 = tf.Variable(tf.truncated_normal(stddev=0.1, shape=[8 * 8 * 64, 1024]))
-    b3 = tf.Variable(tf.constant(0.1, shape=[1024]))
-    x4 = tf.nn.relu(tf.matmul(x3_, w3) + b3)
+    # 4x4x512->2x2x512
+    x = tf.layers.conv2d(x, 512, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 512, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
+    print(x.shape)
 
-    # dense layer w/ 2048 elements
-    w4 = tf.Variable(tf.truncated_normal(stddev=0.1, shape=[1024, 2048]))
-    b4 = tf.Variable(tf.constant(0.1, shape=[2048]))
-    x5 = tf.nn.relu(tf.matmul(x4, w4) + b4)
+    x = tf.reshape(x, shape=[-1, 2 * 2 * 512])
+    print(x.shape)
+
+    # dense layer w/ 4096 elements
+    x = tf.layers.dense(x, units=4096, activation=tf.nn.relu)
+
+    # dense layer w/ 4096 elements
+    x = tf.layers.dense(x, units=4096, activation=tf.nn.relu)
 
     # readout layer
-    w5 = tf.Variable(tf.truncated_normal(stddev=0.1, shape=[2048, num_labels]))
-    b5 = tf.Variable(tf.constant(0.1, shape=[num_labels]))
-    y = tf.matmul(x5, w5) + b5
+    y = tf.layers.dense(x, units=num_labels)
 
     return tf.nn.softmax(y), y, x0, y_
 
 
 check_pickled = False
-check_sets = True
+check_sets = False
 regenerate = False
 pickle_folder = 'pickle'
 dataset_folder = 'wiki_crop'
@@ -289,8 +302,23 @@ with tf.Session() as sess:
             if i % 500 == 0:
                 print('Batch loss: ', sess.run(loss, feed_dict={x0: batch_x, y_: batch_y}))
 
-                print('Accuracy on validation set: ', 100 *
-                      sess.run(accuracy, feed_dict={x0: valid_set, y_: valid_labels}), '%')
+                acc_batch_size = 100
+                num_acc_batches = valid_set.shape[0] // acc_batch_size
+                acc = 0
+                for j in range(num_acc_batches):
+                    acc += sess.run(accuracy, feed_dict={x0: valid_set[j*num_acc_batches:
+                                    (j+1)*num_acc_batches, :, :, :], y_: valid_labels[j*num_acc_batches:
+                                                                                      (j+1)*num_acc_batches, :]})
+                acc /= num_acc_batches
+                print ('Accuracy on validation set', 100.0 * acc, '%')
 
-        print('Accuracy on test set: ', 100 * sess.run(accuracy, feed_dict={x0: test_set, y_: test_labels}), '%')
+    test_batch_size = 100
+    num_test_batches = test_set.shape[0] // test_batch_size
+    acc = 0
+    for j in range(num_test_batches):
+        acc += sess.run(accuracy, feed_dict={x0: test_set[j * num_test_batches:
+        (j + 1) * num_test_batches, :, :, :], y_: test_labels[j * num_test_batches:
+        (j + 1) * num_test_batches, :]})
+    acc /= num_test_batches
+    print('Accuracy on test set', 100.0 * acc, '%')
 
