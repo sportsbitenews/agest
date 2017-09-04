@@ -183,13 +183,13 @@ def max_pool2x2(x):
 
 def create_graph(num_labels):
     # input
-    x0 = tf.placeholder(shape=[None, image_size, image_size, 3], dtype=tf.float32)
+    x = tf.placeholder(shape=[None, image_size, image_size, 3], dtype=tf.float32)
     y_ = tf.placeholder(shape=[None, num_labels], dtype=tf.float32)
     print(x0.shape)
 
     # 64x64x3->32x32x64
-    x = tf.layers.conv2d(x0, 64, kernel_size=[3, 3], padding='SAME')
-    x = tf.layers.conv2d(x0, 64, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 64, kernel_size=[3, 3], padding='SAME')
+    x = tf.layers.conv2d(x, 64, kernel_size=[3, 3], padding='SAME')
     x = tf.layers.max_pooling2d(x, pool_size=[2, 2], strides=[2, 2], padding='SAME')
     print(x.shape)
 
