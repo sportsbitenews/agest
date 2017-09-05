@@ -3,6 +3,7 @@ import math
 import scipy.misc
 import model
 import data
+import sys
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ from six.moves import cPickle as pickle
 image_size = 64
 image_maxval = 255.0
 
-def pickle_classes(folder, pickle_folder, force=False):
+def pickle_classes(folder, pickle_folder, max_per_class, force=False):
     subfolders = os.listdir(folder)
     num_per_class = []
 
@@ -34,7 +35,7 @@ def pickle_classes(folder, pickle_folder, force=False):
             for i in image_files:
                 image_name = os.path.splitext(i)[0]
                 dates = image_name.split('_')
-                birth_date, year_taken = dates[1], dates[-1]
+                birth_date, year_taken = dates[2], dates[-1]
                 year_birth, _, _ = birth_date.split('-')
                 age = int(year_taken) - int(year_birth)
                 if 1 <= age <= 101 and age == cls:
@@ -53,6 +54,10 @@ def pickle_classes(folder, pickle_folder, force=False):
                 img = (scipy.misc.imresize(img, (image_size, image_size, 3), interp='lanczos'))
                 dataset[num_images_read, :, :, :] = (img - 127.0) / 255.0
                 num_images_read = num_images_read + 1
+
+                if num_images_read >= max_per_class:
+                    break
+
             except ImportError as e:
                 print('Cannot read file:', i, ', skipping')
                 continue
@@ -178,10 +183,10 @@ check_pickled = False
 check_sets = False
 regenerate = False
 pickle_folder = 'pickle'
-dataset_folder = 'wiki_crop'
+dataset_folder = 'imdb_crop'
 
 if not os.path.exists('data_train_0.pickle') or regenerate:
-    hist = pickle_classes(dataset_folder, pickle_folder)
+    hist = pickle_classes(dataset_folder, pickle_folder, 1000, regenerate)
 
     if check_pickled:
         check_pickled_data(pickle_folder)
@@ -216,62 +221,67 @@ if check_sets:
                   [train_labels, train_labels, valid_labels, test_labels])
 
 tf.logging.set_verbosity(tf.logging.INFO)
-estimator = tf.estimator.Estimator(model_fn=model.model_fn, params={'learning_rate': 1e-4})
+estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='./model', params={'learning_rate': 1e-4})
 
-estimator.train(
-    input_fn=data.get_input_fn(
-        train_set,
-        train_labels,
-        num_epochs=None,
-        batch_size=100,
-        shuffle=True),
-    steps=3000)
+train = True
+if train:
+    for i in range(20):
+        estimator.train(
+            input_fn=data.get_input_fn(
+                train_set,
+                train_labels,
+                num_epochs=None,
+                batch_size=50,
+                shuffle=True),
+            steps=2000)
 
-ev = estimator.evaluate(
-    input_fn=data.get_input_fn(
-        train_set,
-        train_labels,
-        num_epochs=1,
-        batch_size=100,
-        shuffle=False))
+        ev = estimator.evaluate(
+            input_fn=data.get_input_fn(
+                train_set,
+                train_labels,
+                num_epochs=1,
+                batch_size=100,
+                shuffle=False))
 
-print(ev)
+        print('Accuracy on training set:', ev['accuracy'])
 
+        ev = estimator.evaluate(
+            input_fn=data.get_input_fn(
+                valid_set,
+                valid_labels,
+                num_epochs=1,
+                batch_size=50,
+                shuffle=False))
 
-# batch_size = 50
-# with tf.Session() as sess:
-#     sess.run(tf.global_variables_initializer())
-#
-#     num_epochs = 100
-#     for epoch in range(num_epochs):
-#         print('Epoch(', epoch, '/', num_epochs,')')
-#         # train_dataset, train_labels = permute_dataset(train_dataset, train_labels)
-#         for i in range(train_set.shape[0] // batch_size):
-#             batch_offset = i * batch_size
-#             batch_x = train_set[batch_offset:batch_offset + batch_size, :, :, :]
-#             batch_y = train_labels[batch_offset:batch_offset + batch_size, :]
-#             sess.run(train_step, feed_dict={x0: batch_x, y_: batch_y})
-#
-#             if i % 500 == 0:
-#                 print('Batch loss: ', sess.run(loss, feed_dict={x0: batch_x, y_: batch_y}))
-#                 print('Batch accuracy: ', sess.run(accuracy, feed_dict={x0: batch_x, y_: batch_y}))
-#                 acc_batch_size = 100
-#                 num_acc_batches = valid_set.shape[0] // acc_batch_size
-#                 acc = 0
-#                 for j in range(num_acc_batches):
-#                     acc += sess.run(accuracy, feed_dict={x0: valid_set[j*num_acc_batches:
-#                                     (j+1)*num_acc_batches, :, :, :], y_: valid_labels[j*num_acc_batches:
-#                                                                                       (j+1)*num_acc_batches, :]})
-#                 acc /= num_acc_batches
-#                 print ('Accuracy on validation set:', acc)
-#
-#     test_batch_size = 100
-#     num_test_batches = test_set.shape[0] // test_batch_size
-#     acc = 0
-#     for j in range(num_test_batches):
-#         acc += sess.run(accuracy, feed_dict={x0: test_set[j * num_test_batches:
-#         (j + 1) * num_test_batches, :, :, :], y_: test_labels[j * num_test_batches:
-#         (j + 1) * num_test_batches, :]})
-#     acc /= num_test_batches
-#     print('Accuracy on test set', acc)
+        print('Accuracy on validation set:', ev['accuracy'])
 
+    ev = estimator.evaluate(
+            input_fn=data.get_input_fn(
+                test_set,
+                test_labels,
+                num_epochs=1,
+                batch_size=50,
+                shuffle=False))
+
+    print('Accuracy on test set:', ev['accuracy'])
+else:
+    file_name = '1.jpg'
+    dataset = np.ndarray(shape=(1, image_size, image_size, 3), dtype=np.float32)
+    try:
+        img = ndimage.imread(file_name, mode='RGB').astype(float)
+
+        if img.shape[0] <= 1 or img.shape[1] <= 1:
+            print('Wrong image')
+            exit(-1)
+
+        img = (scipy.misc.imresize(img, (image_size, image_size, 3), interp='lanczos'))
+        dataset[0, :, :, :] = (img - 127.0) / 255.0
+    except ImportError as e:
+        print('Cannot read file:', file_name, ', skipping')
+        exit(-1)
+
+    ev = estimator.predict(input_fn=tf.estimator.inputs.numpy_input_fn(
+        x={"x": np.array(dataset)}, num_epochs=1, shuffle=False))
+
+    for i in ev:
+        print("Prediction:", np.argmax(i['ages']))
