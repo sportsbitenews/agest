@@ -110,7 +110,7 @@ def show_hist(folder):
 def merge_datasets(folder, num_per_class):
 
     dataset = np.ndarray(shape=(num_per_class * 100, image_size, image_size, 3), dtype=np.float32)
-    labels = np.ndarray(shape=(num_per_class * 100, 100), dtype=np.float32)
+    labels = np.ndarray(shape=(num_per_class * 100, 1), dtype=np.float32)
 
     for cls in range(100):
         print('Merging class', cls)
@@ -140,8 +140,8 @@ def merge_datasets(folder, num_per_class):
             e = b + rest
             dataset[b:e, :, :, :] = data[0:rest, :, :, :]
 
-        label = np.zeros(100, dtype=np.float32)
-        label[cls] = 1.0
+        label = np.array(1, dtype=np.float32)
+        label = cls
         labels[start_idx:end_idx, :] = label
 
     print('Permuting dataset...')
@@ -163,7 +163,7 @@ def check_dataset(sets, labels):
         for j in range(4):
             idx = np.random.randint(sets[i].shape[0])
             a = plt.subplot(4, 4, i * 4 + j + 1)
-            label = np.argmax(labels[i][idx]) + 1
+            label = labels[i][idx] + 1
             a.set_title(str(label))
             plt.imshow(sets[i][idx] + 0.5)
     plt.tight_layout()
@@ -186,7 +186,7 @@ pickle_folder = 'pickle'
 dataset_folder = 'imdb_crop'
 
 if not os.path.exists('data_train_0.pickle') or regenerate:
-    hist = pickle_classes(dataset_folder, pickle_folder, 1000, regenerate)
+    hist = pickle_classes(dataset_folder, pickle_folder, 2000)
 
     if check_pickled:
         check_pickled_data(pickle_folder)
@@ -221,9 +221,9 @@ if check_sets:
                   [train_labels, train_labels, valid_labels, test_labels])
 
 tf.logging.set_verbosity(tf.logging.INFO)
-estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='./model', params={'learning_rate': 1e-4})
+estimator = tf.estimator.Estimator(model_fn=model.model_fn, model_dir='./model', params={'learning_rate': 1e-6})
 
-train = True
+train = False
 if train:
     for i in range(20):
         estimator.train(
@@ -231,9 +231,9 @@ if train:
                 train_set,
                 train_labels,
                 num_epochs=None,
-                batch_size=50,
+                batch_size=100,
                 shuffle=True),
-            steps=2000)
+            steps=1000)
 
         ev = estimator.evaluate(
             input_fn=data.get_input_fn(
@@ -243,17 +243,17 @@ if train:
                 batch_size=100,
                 shuffle=False))
 
-        print('Accuracy on training set:', ev['accuracy'])
+        print('Loss on training set:', ev)
 
         ev = estimator.evaluate(
             input_fn=data.get_input_fn(
                 valid_set,
                 valid_labels,
                 num_epochs=1,
-                batch_size=50,
+                batch_size=100,
                 shuffle=False))
 
-        print('Accuracy on validation set:', ev['accuracy'])
+        print('Loss on validation set:', ev)
 
     ev = estimator.evaluate(
             input_fn=data.get_input_fn(
@@ -263,7 +263,7 @@ if train:
                 batch_size=50,
                 shuffle=False))
 
-    print('Accuracy on test set:', ev['accuracy'])
+    print('Loss on test set:', ev)
 else:
     file_name = '1.jpg'
     dataset = np.ndarray(shape=(1, image_size, image_size, 3), dtype=np.float32)
@@ -284,4 +284,4 @@ else:
         x={"x": np.array(dataset)}, num_epochs=1, shuffle=False))
 
     for i in ev:
-        print("Prediction:", np.argmax(i['ages']))
+        print("Prediction:", i['age'])
