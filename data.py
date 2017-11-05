@@ -19,8 +19,13 @@ def input_fn(data_folder, shuffle=False, repeat_count=1):
 
             _, birth_date, year_taken = os.path.splitext(file)[0].split("_")
             year_birth = birth_date.split("-")[0]
-            files.append(full_file_path)
-            labels.append(float(int(year_taken) - int(year_birth)))
+            age = int(year_taken) - int(year_birth)
+
+            if 0 < age <= 100:
+                logit = [0.0] * 100
+                logit[age-1] = 1.0
+                files.append(full_file_path)
+                labels.append(logit)
 
     tf_files = tf.constant(files)
     tf_labels = tf.constant(labels)
@@ -31,7 +36,7 @@ def input_fn(data_folder, shuffle=False, repeat_count=1):
         image_string = tf.read_file(filename)
         image_decoded = tf.image.decode_jpeg(image_string, channels=3)
         image_resized = tf.image.resize_images(image_decoded, [64, 64])
-        return image_resized, [label]
+        return image_resized, label
 
     def filter_function(features, label):
         image_mean, image_stddev = tf.nn.moments(features, [0, 1, 2])
@@ -39,12 +44,11 @@ def input_fn(data_folder, shuffle=False, repeat_count=1):
 
     def adjust_function(features, label):
         image_mean, image_stddev = tf.nn.moments(features, [0, 1])
-        image_resized = tf.divide(tf.subtract(features, image_mean), image_stddev)
-        return {'x': image_resized}, label
+        image_resized = tf.divide(tf.subtract(features, tf.constant(127.0)), tf.constant(255.0))
+        return image_resized, label
 
     dataset = dataset.map(_parse_function).\
-        filter(filter_function).\
-        map(adjust_function)
+        filter(filter_function).map(adjust_function)
     if shuffle:
         dataset = dataset.shuffle(buffer_size=256)
     dataset = dataset.repeat(repeat_count).batch(32)
