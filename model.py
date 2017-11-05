@@ -45,13 +45,15 @@ def model_fn(features, labels, mode, params):
     # regression layer
     prediction = tf.layers.dense(x, units=1, activation=None)
 
+    prediction = tf.Print(prediction, [tf.shape(prediction)])
+
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(
             mode=mode,
             predictions={'age': prediction})
 
     # loss function & optimizer
-    loss = tf.reduce_mean(tf.losses.mean_squared_error(predictions=prediction, labels=labels))
+    loss = tf.losses.mean_squared_error(predictions=prediction, labels=labels)
     train_op = tf.train.AdamOptimizer(params['learning_rate'])\
         .minimize(loss, global_step=tf.train.get_global_step())
 
