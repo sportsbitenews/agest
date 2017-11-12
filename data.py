@@ -35,7 +35,7 @@ def input_fn(data_folder, shuffle=False, repeat_count=1):
     def _parse_function(filename, label):
         image_string = tf.read_file(filename)
         image_decoded = tf.image.decode_jpeg(image_string, channels=3)
-        image_resized = tf.image.resize_images(image_decoded, [64, 64])
+        image_resized = tf.image.resize_images(image_decoded, [256, 256])
         return image_resized, label
 
     def filter_function(features, label):
